@@ -12,37 +12,29 @@ import os
 # =========================
 st.set_page_config(
     page_title="Instrunet AI V2", 
-    page_icon="🎼",
+    page_icon="🎼", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =========================
-# DYNAMIC PATH HANDLING 
+# PATHS & MODEL LOADING
 # =========================
-# This ensures the app finds the model whether on Windows, Mac, or Cloud
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# If your model is inside a 'models' folder, use this:
+# Ensure your model is in the 'models' folder
 MODEL_PATH = os.path.join(BASE_DIR, "models", "irmas_instrument_model.h5")
-# If your model is in the main folder, use: MODEL_PATH = os.path.join(BASE_DIR, "irmas_instrument_model.h5")
-
-# =========================
-# MODEL & LABELS
-# =========================
 INSTRUMENTS = ['cel', 'cla', 'flu', 'gac', 'gel', 'org', 'pia', 'sax', 'tru', 'vio', 'voi']
 
 @st.cache_resource
 def load_new_model():
-    if not os.path.exists(MODEL_PATH):
-        st.error(f"Model file not found at: {MODEL_PATH}. Please check your folder structure!")
+    if os.path.exists(MODEL_PATH):
+        return tf.keras.models.load_model(MODEL_PATH, compile=False)
+    else:
+        st.error(f"Model not found at {MODEL_PATH}. Check your folder structure!")
         return None
-    return tf.keras.models.load_model(MODEL_PATH, compile=False)
 
 model = load_new_model()
 
-# =========================
-# FAMILY MAP
-# =========================
 FAMILY_MAP = {
     "strings": ["cel", "gac", "gel", "vio"],
     "woodwind": ["cla", "flu", "sax"],
@@ -52,168 +44,199 @@ FAMILY_MAP = {
 }
 
 # =========================
-# SESSION STATE
+# INITIALIZE SESSION STATE
 # =========================
-if "page" not in st.session_state:
-    st.session_state.page = "Upload Audio"
-if "history" not in st.session_state:
+if "page" not in st.session_state: 
+    st.session_state.page = "About"
+if "history" not in st.session_state: 
     st.session_state.history = []
-if "current_result" not in st.session_state:
+if "current_result" not in st.session_state: 
     st.session_state.current_result = None
 
 # =========================
-# FEATURE EXTRACTION
-# =========================
-def extract_v2_features(path):
-    # Load 3 seconds to match training
-    y, sr = librosa.load(path, sr=22050, duration=3)
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40).T
-
-    # Pad or truncate to exactly 130 time steps
-    if mfcc.shape[0] < 130:
-        mfcc = np.pad(mfcc, ((0, 130 - mfcc.shape[0]), (0, 0)))
-    else:
-        mfcc = mfcc[:130]
-
-    return mfcc, y, sr
-
-# =========================
-# MAIN ANALYSIS
+# CORE FUNCTIONS
 # =========================
 def analyze_v2(audio_path):
-    mfcc, y, sr = extract_v2_features(audio_path)
-    # Reshape for CNN input: (batch, time, features, channels)
+    # Load 3s audio as MFCC (130, 40)
+    y, sr = librosa.load(audio_path, sr=22050, duration=3)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40).T
+    
+    # Pad or truncate to 130 time steps
+    if mfcc.shape[0] < 130:
+        mfcc = np.pad(mfcc, ((0, 130 - mfcc.shape[0]), (0, 0)), mode='constant')
+    else:
+        mfcc = mfcc[:130]
+        
     X = mfcc.reshape(1, 130, 40, 1)
-
+    
+    # Predict
     raw_preds = model.predict(X, verbose=0)[0]
     instr_scores = {INSTRUMENTS[i]: float(raw_preds[i]) for i in range(len(INSTRUMENTS))}
-
-    # Family logic: Take the max confidence found within that family
-    family_scores = {}
-    for fam, members in FAMILY_MAP.items():
-        family_scores[fam] = max([instr_scores[m] for m in members])
-
+    
+    # Family scores based on max instrument confidence
+    family_scores = {fam: max([instr_scores[m] for m in members]) for fam, members in FAMILY_MAP.items()}
     top_family = max(family_scores, key=family_scores.get)
-    top_instrument = max(instr_scores, key=instr_scores.get)
-
+    
     return {
         "family": top_family,
-        "instrument": top_instrument,
+        "instrument": max(instr_scores, key=instr_scores.get),
         "confidence": family_scores[top_family],
         "distribution": instr_scores,
-        "audio_path": audio_path,
-        "raw_y": y,
-        "sr": sr,
-        "filename": os.path.basename(audio_path)
+        "raw_y": y, 
+        "sr": sr
     }
 
 # =========================
-# SIDEBAR
+# SIDEBAR NAVIGATION
 # =========================
 with st.sidebar:
     st.title("🎼 Instrunet AI V2")
-    st.session_state.page = st.radio(
-        "Navigation",
-        ["Upload Audio", "Latest Prediction", "Instrument Distribution", "Audio Analysis", "History", "About"]
-    )
-    st.divider()
-    st.info("Powered by Multi-label CNN")
+    st.markdown("---")
+    
+    st.subheader("📌 Navigation")
+    # Mapping current page to radio index
+    pages = ["About", "Upload & Analyze", "Instrument Distribution", "Audio Analysis", "History"]
+    current_index = pages.index(st.session_state.page)
+    
+    choice = st.radio("Go to:", pages, index=current_index)
+    
+    # Only update page if the user clicked the radio (prevents infinite loop with rerun)
+    if choice != st.session_state.page:
+        st.session_state.page = choice
+        st.rerun()
+    
+    st.markdown("---")
+    if st.session_state.history:
+        st.subheader("📜 Recent History")
+        for i, h in enumerate(st.session_state.history[:3]):
+            if st.button(f"{h['filename'][:12]}.. ({h['family']})", key=f"side_{i}"):
+                st.session_state.current_result = h
+                st.session_state.page = "Instrument Distribution"
+                st.rerun()
 
 # =========================
-# PAGES
+# PAGE ROUTING
 # =========================
-if st.session_state.page == "Upload Audio":
-    st.header("📤 Upload Audio")
-    uploaded = st.file_uploader("Upload WAV or MP3 (3-second clips work best)", type=["wav", "mp3"])
 
-    if uploaded:
-        st.audio(uploaded)
-        if st.button("Analyze Audio", use_container_width=True):
+# PAGE 1: ABOUT (LANDING PAGE)
+if st.session_state.page == "About":
+    st.header("📖 About Instrunet AI")
+    st.write("""
+    Instrunet AI is a state-of-the-art instrument recognition system. 
+    Unlike traditional models that only pick one instrument, our **Multi-label CNN** looks for 
+    multiple spectral signatures simultaneously.
+    """)
+    
+    
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Architecture", "4-Layer CNN")
+    col2.metric("Dataset", "IRMAS")
+    col3.metric("Analysis Window", "3 Seconds")
+    
+    st.markdown("""
+    ### 🛠 How it works:
+    1. **Preprocessing:** We convert your audio into a Mel-Spectrogram.
+    2. **Analysis:** The CNN detects patterns related to 11 specific instruments.
+    3. **Family Logic:** We group detections into Strings, Woodwind, Brass, Keyboard, and Voice.
+    """)
+    
+    if st.button("Get Started 🚀", use_container_width=True):
+        st.session_state.page = "Upload & Analyze"
+        st.rerun()
+
+# PAGE 2: UPLOAD & ANALYZE
+elif st.session_state.page == "Upload & Analyze":
+    st.header("📤 Input Audio")
+    
+    tab1, tab2 = st.tabs(["📁 Upload File", "🎤 Live Record"])
+    
+    with tab1:
+        uploaded = st.file_uploader("Upload a WAV or MP3 clip", type=["wav", "mp3"])
+    with tab2:
+        recorded = st.audio_input("Record 3 seconds of audio")
+
+    source = uploaded if uploaded else recorded
+
+    if source:
+        st.audio(source)
+        if st.button("🚀 Analyze Audio", use_container_width=True):
             if model is None:
-                st.error("Model not loaded. Fix path issues first.")
+                st.error("Model not loaded! Check 'models' folder.")
             else:
-                with st.spinner("Analyzing spectral patterns..."):
+                with st.spinner("Decoding spectral features..."):
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                        tmp.write(uploaded.getvalue())
+                        tmp.write(source.getvalue())
                         path = tmp.name
-
+                    
                     result = analyze_v2(path)
-                    result["filename"] = uploaded.name
-
+                    result["filename"] = getattr(source, 'name', 'Live Recording.wav')
+                    
+                    # Store Result
                     st.session_state.current_result = result
                     st.session_state.history.insert(0, result)
-                    st.success("Analysis complete!")
-                    st.session_state.page = "Latest Prediction"
+                    
+                    # PROGRAMMATIC JUMP
+                    st.session_state.page = "Instrument Distribution"
                     st.rerun()
 
-elif st.session_state.page == "Latest Prediction":
-    res = st.session_state.current_result
-    if not res:
-        st.warning("No audio analyzed yet.")
-    else:
-        st.markdown(f"## 🎵 Predicted Family: **{res['family'].upper()}**")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Family Confidence", f"{res['confidence']*100:.2f}%")
-        with col2:
-            st.metric("Top Instrument", res['instrument'].upper())
-        st.info(f"The model identifies this as part of the **{res['family']}** family.")
-
+# PAGE 3: DISTRIBUTION (DIRECT REDIRECT TARGET)
 elif st.session_state.page == "Instrument Distribution":
     res = st.session_state.current_result
     if not res:
-        st.warning("Analyze audio first.")
+        st.warning("No data found. Please analyze an audio file first!")
+        if st.button("Go to Upload"):
+            st.session_state.page = "Upload & Analyze"
+            st.rerun()
     else:
-        st.markdown(f"## 📊 {res['family'].upper()} Instrument Breakdown")
-        st.write("Specific confidence levels for instruments in this family:")
-        for inst in FAMILY_MAP[res['family']]:
-            val = res["distribution"][inst]
-            st.write(f"**{inst.upper()}**")
-            st.progress(val)
-            st.caption(f"Confidence: {val*100:.2f}%")
+        st.header(f"📊 Results for: {res['filename']}")
+        
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            st.markdown(f"### Detected Family: \n# {res['family'].upper()}")
+            st.metric("Family Confidence", f"{res['confidence']*100:.1f}%")
+            st.info(f"Top Instrument: **{res['instrument'].upper()}**")
+        
+        with c2:
+            st.subheader(f"Internal {res['family'].title()} Distribution")
+            for inst in FAMILY_MAP[res['family']]:
+                val = res["distribution"][inst]
+                st.write(f"**{inst.upper()}**")
+                st.progress(val)
+                st.caption(f"Confidence: {val*100:.1f}%")
 
+# PAGE 4: AUDIO ANALYSIS
 elif st.session_state.page == "Audio Analysis":
     res = st.session_state.current_result
     if not res:
-        st.warning("Analyze audio first.")
+        st.warning("Analyze a file to see the spectral breakdown.")
     else:
-        st.markdown("## 📈 Audio Visualization")
-        fig, ax = plt.subplots(2, 1, figsize=(10, 6))
-
-        # Waveform
-        librosa.display.waveshow(res['raw_y'], sr=res['sr'], ax=ax[0], color="#1f77b4")
-        ax[0].set_title("Waveform (Time Domain)")
-
-        # Spectrogram
+        st.header("📈 Spectral Visualization")
+        
+        
+        
+        fig, ax = plt.subplots(2, 1, figsize=(10, 7))
+        librosa.display.waveshow(res['raw_y'], sr=res['sr'], ax=ax[0], color="#2E86C1")
+        ax[0].set_title("Time Domain: Waveform")
+        
         S = librosa.feature.melspectrogram(y=res['raw_y'], sr=res['sr'])
-        S_db = librosa.power_to_db(S, ref=np.max)
-        img = librosa.display.specshow(S_db, x_axis='time', y_axis='mel', ax=ax[1], sr=res['sr'])
-        ax[1].set_title("Mel Spectrogram (Frequency Domain)")
-        fig.colorbar(img, ax=ax[1], format="%+2.0f dB")
-
+        librosa.display.specshow(librosa.power_to_db(S, ref=np.max), x_axis='time', y_axis='mel', ax=ax[1])
+        ax[1].set_title("Frequency Domain: Mel-Spectrogram")
         plt.tight_layout()
         st.pyplot(fig)
 
+# PAGE 5: HISTORY
 elif st.session_state.page == "History":
-    st.markdown("## 🕘 History")
+    st.header("📜 Session History")
     if not st.session_state.history:
-        st.info("No history yet.")
+        st.info("Your analysis history will appear here.")
     else:
-        for i, item in enumerate(st.session_state.history[:5]): # Show last 5
-            if st.button(f"{item['filename']} → {item['family'].upper()} ({item['confidence']*100:.1f}%)", key=f"hist_{i}"):
-                st.session_state.current_result = item
-                st.session_state.page = "Latest Prediction"
-                st.rerun()
-
-elif st.session_state.page == "About":
-    st.markdown("""
-    ## ℹ️ Instrunet AI V2  
-    **Multi-label Music Instrument Recognition**
-
-    This version uses a **Convolutional Neural Network (CNN)** trained on the IRMAS dataset. Unlike standard classifiers, this model uses **Sigmoid activation** to detect multiple instruments simultaneously.
-
-    - **Input:** 3-second audio clip  
-    - **Features:** 40 Mel-Frequency Cepstral Coefficients (MFCCs)  
-    - **Architecture:** 4-Layer CNN  
-    - **Classes:** 11 Instruments (Cello, Flute, Guitar, Piano, Sax, etc.)
-    """)
+        for i, item in enumerate(st.session_state.history):
+            with st.expander(f"{item['filename']} — {item['family'].upper()}"):
+                col_a, col_b = st.columns(2)
+                col_a.write(f"**Top Instrument:** {item['instrument'].upper()}")
+                col_a.write(f"**Confidence:** {item['confidence']*100:.1f}%")
+                if col_b.button("Reload Report", key=f"hist_btn_{i}"):
+                    st.session_state.current_result = item
+                    st.session_state.page = "Instrument Distribution"
+                    st.rerun()
