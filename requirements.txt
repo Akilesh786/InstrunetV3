@@ -5,3 +5,8 @@ numpy
 joblib
 soundfile
 matplotlib
+streamlit
+tensorflow-cpu
+librosa
+numpy
+matplotlib
