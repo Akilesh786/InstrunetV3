@@ -28,9 +28,7 @@ INSTRUMENTS = ['cel', 'cla', 'flu', 'gac', 'gel', 'org', 'pia', 'sax', 'tru', 'v
 def load_new_model():
     if os.path.exists(MODEL_PATH):
         return tf.keras.models.load_model(MODEL_PATH, compile=False)
-    else:
-        st.error(f"Model not found at {MODEL_PATH}. Check your folder structure!")
-        return None
+    return None
 
 model = load_new_model()
 
@@ -45,15 +43,11 @@ FAMILY_MAP = {
 # =========================
 # INITIALIZE SESSION STATE
 # =========================
-if "page" not in st.session_state: 
-    st.session_state.page = "About"
-if "history" not in st.session_state: 
-    st.session_state.history = []
-if "current_result" not in st.session_state: 
-    st.session_state.current_result = None
-# Initialize Chat History for the Agent
+if "page" not in st.session_state: st.session_state.page = "About"
+if "history" not in st.session_state: st.session_state.history = []
+if "current_result" not in st.session_state: st.session_state.current_result = None
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "I'm your Instrunet AI Agent. Analyze some audio to start a conversation!"}]
+    st.session_state.messages = [{"role": "assistant", "content": "I'm your AI Guide. Ask 'How?' to see the spectral data!"}]
 
 # =========================
 # CORE FUNCTIONS
@@ -87,8 +81,7 @@ with st.sidebar:
     
     st.subheader("📌 Navigation")
     pages = ["About", "Upload & Analyze", "Instrument Distribution", "Audio Analysis", "History"]
-    current_index = pages.index(st.session_state.page)
-    choice = st.radio("Go to:", pages, index=current_index)
+    choice = st.radio("Go to:", pages, index=pages.index(st.session_state.page))
     
     if choice != st.session_state.page:
         st.session_state.page = choice
@@ -96,35 +89,39 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # --- FLOATING AI AGENT SECTION ---
-    st.subheader("🤖 AI Assistant")
-    with st.expander("💬 Ask about current audio", expanded=True if st.session_state.current_result else False):
-        # Display existing chat
+    # --- INTELLIGENT AI AGENT ---
+    st.subheader("🤖 AI Technical Guide")
+    with st.expander("💬 Chat with Assistant", expanded=True if st.session_state.current_result else False):
         for msg in st.session_state.messages:
             st.chat_message(msg["role"]).write(msg["content"])
 
-        # Chat input logic
-        if prompt := st.chat_input("How does this sound?"):
+        if prompt := st.chat_input("Ask: 'How did you know?'"):
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
 
-            # CONTEXT-AWARE RESPONSE LOGIC
             res = st.session_state.current_result
             if res is None:
-                response = "I need you to upload and analyze an audio file before I can answer specific questions!"
+                response = "Upload a clip first! I need data to explain the science to you."
             else:
                 p = prompt.lower()
-                if "why" in p or "reason" in p:
-                    response = f"I classified this as {res['family']} because my CNN detected spectral peaks consistent with {res['instrument']} instruments."
+                if "how" in p or "why" in p or "spectrogram" in p:
+                    response = (f"I identified {res['instrument']} based on spectral peaks. "
+                                f"I am switching your view to **Audio Analysis** so you can see the spectrogram evidence.")
+                    st.session_state.page = "Audio Analysis"
                 elif "confidence" in p or "sure" in p:
-                    response = f"I am {res['confidence']*100:.1f}% confident. The Mel-Spectrogram showed a very clear signature for {res['instrument']}."
-                elif "timbre" in p or "frequency" in p:
-                    response = "The frequency domain shows high harmonic content in the mid-range, which is typical for this category."
+                    response = f"My confidence is **{res['confidence']*100:.1f}%**. This is calculated from the MFCC features of the audio."
                 else:
-                    response = f"This sounds like a {res['instrument']} from the {res['family']} family. What else would you like to know?"
+                    response = f"The analysis of '{res['filename']}' points to a {res['instrument']}."
 
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.chat_message("assistant").write(response)
+            if "switching" in response: st.rerun()
+
+        # Clear Chat Button - PLACED UNDER THE CHAT
+        st.write("") 
+        if st.button("🗑️ Clear Chat History", use_container_width=True):
+            st.session_state.messages = [{"role": "assistant", "content": "Chat reset! Ready for next analysis."}]
+            st.rerun()
 
 # =========================
 # PAGE ROUTING
@@ -132,33 +129,30 @@ with st.sidebar:
 
 if st.session_state.page == "About":
     st.header("📖 About Instrunet AI")
-    st.write("Instrunet AI is a state-of-the-art instrument recognition system using a Multi-label CNN.")
+    st.write("A state-of-the-art instrument recognition system using Multi-label CNNs.")
     
     col1, col2, col3 = st.columns(3)
     col1.metric("Architecture", "4-Layer CNN")
     col2.metric("Dataset", "IRMAS")
-    col3.metric("Window", "3 Seconds")
-    
+    col3.metric("Analysis", "3s Window")
     if st.button("Get Started 🚀", use_container_width=True):
-        st.session_state.page = "Upload & Analyze"
-        st.rerun()
+        st.session_state.page = "Upload & Analyze"; st.rerun()
 
 elif st.session_state.page == "Upload & Analyze":
     st.header("📤 Input Audio")
     tab1, tab2 = st.tabs(["📁 Upload File", "🎤 Live Record"])
     with tab1: uploaded = st.file_uploader("Upload WAV/MP3", type=["wav", "mp3"])
-    with tab2: recorded = st.audio_input("Record audio")
+    with tab2: recorded = st.audio_input("Record Live Clip")
     source = uploaded if uploaded else recorded
 
     if source:
         st.audio(source)
         if st.button("🚀 Analyze Audio", use_container_width=True):
-            with st.spinner("Analyzing..."):
+            with st.spinner("Decoding spectral features..."):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    tmp.write(source.getvalue())
-                    path = tmp.name
+                    tmp.write(source.getvalue()); path = tmp.name
                 res = analyze_v2(path)
-                res["filename"] = getattr(source, 'name', 'Live Recording.wav')
+                res["filename"] = getattr(source, 'name', 'Live_Recording.wav')
                 st.session_state.current_result = res
                 st.session_state.history.insert(0, res)
                 st.session_state.page = "Instrument Distribution"
@@ -166,36 +160,48 @@ elif st.session_state.page == "Upload & Analyze":
 
 elif st.session_state.page == "Instrument Distribution":
     res = st.session_state.current_result
-    if not res:
-        st.warning("Analyze a file first!")
+    if not res: st.warning("Please analyze a file first!")
     else:
         st.header(f"📊 Results for: {res['filename']}")
         c1, c2 = st.columns([1, 2])
         with c1:
             st.markdown(f"### Detected Family: \n# {res['family'].upper()}")
-            st.metric("Confidence", f"{res['confidence']*100:.1f}%")
+            st.metric("Family Confidence", f"{res['confidence']*100:.1f}%")
+            st.info(f"Top Instrument: **{res['instrument'].upper()}**")
         with c2:
-            st.subheader("Instrument Breakdown")
+            st.subheader(f"Internal {res['family'].title()} Distribution")
             for inst in FAMILY_MAP[res['family']]:
+                val = res["distribution"][inst]
                 st.write(f"**{inst.upper()}**")
-                st.progress(res["distribution"][inst])
+                st.progress(val)
+                st.caption(f"Confidence: {val*100:.1f}%")
 
 elif st.session_state.page == "Audio Analysis":
     res = st.session_state.current_result
-    if not res: st.warning("Analyze a file first!")
+    if not res: st.warning("Analyze a file to see spectral breakdown.")
     else:
         st.header("📈 Spectral Visualization")
+        st.info("The AI Agent redirected you here to show the technical evidence (Mel-Spectrogram).")
         
         fig, ax = plt.subplots(2, 1, figsize=(10, 7))
-        librosa.display.waveshow(res['raw_y'], sr=res['sr'], ax=ax[0])
+        librosa.display.waveshow(res['raw_y'], sr=res['sr'], ax=ax[0], color="#2E86C1")
+        ax[0].set_title("Time Domain: Waveform")
         S = librosa.feature.melspectrogram(y=res['raw_y'], sr=res['sr'])
         librosa.display.specshow(librosa.power_to_db(S, ref=np.max), x_axis='time', y_axis='mel', ax=ax[1])
+        ax[1].set_title("Frequency Domain: Mel-Spectrogram")
+        plt.tight_layout()
         st.pyplot(fig)
 
 elif st.session_state.page == "History":
-    st.header("📜 History")
-    for i, item in enumerate(st.session_state.history):
-        if st.button(f"{item['filename']} — {item['family'].upper()}", key=f"h_{i}"):
-            st.session_state.current_result = item
-            st.session_state.page = "Instrument Distribution"
-            st.rerun()
+    st.header("📜 Session History")
+    if not st.session_state.history: st.info("History is empty.")
+    else:
+        for i, item in enumerate(st.session_state.history):
+            with st.expander(f"{item['filename']} — {item['family'].upper()}"):
+                col_a, col_b = st.columns(2)
+                col_a.write(f"**Top Instrument:** {item['instrument'].upper()}")
+                col_a.write(f"**Confidence:** {item['confidence']*100:.1f}%")
+                if col_b.button("Reload Report", key=f"hist_btn_{i}"):
+                    st.session_state.current_result = item
+                    st.session_state.page = "Instrument Distribution"
+                    st.rerun()
