@@ -10,3 +10,4 @@ tensorflow-cpu
 librosa
 numpy
 matplotlib
+plotly

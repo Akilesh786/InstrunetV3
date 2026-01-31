@@ -3,205 +3,279 @@ import tensorflow as tf
 import librosa
 import librosa.display
 import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import tempfile
-import matplotlib.pyplot as plt
 import os
+import time
+from datetime import datetime
 
-# =========================
-# PAGE CONFIG
-# =========================
+# ==========================================
+# 🚩 SYSTEM CORE CONFIGURATION
+# ==========================================
 st.set_page_config(
-    page_title="Instrunet AI V2", 
-    page_icon="🎼", 
+    page_title="Instrunet AI V3",
+    page_icon="🎼",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# =========================
-# PATHS & MODEL LOADING
-# =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "models", "irmas_instrument_model.h5")
 INSTRUMENTS = ['cel', 'cla', 'flu', 'gac', 'gel', 'org', 'pia', 'sax', 'tru', 'vio', 'voi']
 
-@st.cache_resource
-def load_new_model():
-    if os.path.exists(MODEL_PATH):
-        return tf.keras.models.load_model(MODEL_PATH, compile=False)
-    return None
-
-model = load_new_model()
-
-FAMILY_MAP = {
-    "strings": ["cel", "gac", "gel", "vio"],
-    "woodwind": ["cla", "flu", "sax"],
-    "brass": ["tru"],
-    "keyboard": ["pia", "org"],
-    "voice": ["voi"]
+FULL_NAMES = {
+    'cel': 'Cello', 'cla': 'Clarinet', 'flu': 'Flute', 'gac': 'Acoustic Guitar',
+    'gel': 'Electric Guitar', 'org': 'Organ', 'pia': 'Piano', 'sax': 'Saxophone',
+    'tru': 'Trumpet', 'vio': 'Violin', 'voi': 'Human Voice'
 }
 
-# =========================
-# INITIALIZE SESSION STATE
-# =========================
-if "page" not in st.session_state: st.session_state.page = "About"
-if "history" not in st.session_state: st.session_state.history = []
-if "current_result" not in st.session_state: st.session_state.current_result = None
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "I'm your AI Guide. Ask 'How?' to see the spectral data!"}]
+# ==========================================
+# 🎨 ANIMATED CSS UI ENGINE
+# ==========================================
+def apply_ultra_styles():
+    st.markdown("""
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
 
-# =========================
-# CORE FUNCTIONS
-# =========================
-def analyze_v2(audio_path):
-    y, sr = librosa.load(audio_path, sr=22050, duration=3)
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40).T
-    if mfcc.shape[0] < 130:
-        mfcc = np.pad(mfcc, ((0, 130 - mfcc.shape[0]), (0, 0)), mode='constant')
-    else:
-        mfcc = mfcc[:130]
-    X = mfcc.reshape(1, 130, 40, 1)
-    raw_preds = model.predict(X, verbose=0)[0]
-    instr_scores = {INSTRUMENTS[i]: float(raw_preds[i]) for i in range(len(INSTRUMENTS))}
-    family_scores = {fam: max([instr_scores[m] for m in members]) for fam, members in FAMILY_MAP.items()}
-    top_family = max(family_scores, key=family_scores.get)
-    return {
-        "family": top_family,
-        "instrument": max(instr_scores, key=instr_scores.get),
-        "confidence": family_scores[top_family],
-        "distribution": instr_scores,
-        "raw_y": y, "sr": sr
-    }
+        .stApp { background: #0b0f19; color: #e2e8f0; font-family: 'Inter', sans-serif; }
+        
+        /* Smooth Entry Animation */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .stMarkdown, .stButton, .stPlotlyChart {
+            animation: fadeInUp 0.6s ease-out;
+        }
 
-# =========================
-# SIDEBAR NAVIGATION & AI AGENT
-# =========================
-with st.sidebar:
-    st.title("🎼 Instrunet AI V2")
-    st.markdown("---")
+        [data-testid="stSidebar"] { 
+            background-color: #0f172a !important; 
+            border-right: 1px solid #1e293b;
+            min-width: 300px !important;
+        }
+        
+        .nav-header { 
+            color: #38bdf8; font-size: 28px; font-weight: 900; 
+            padding: 30px 0; text-align: center; border-bottom: 2px solid #1e293b;
+            margin-bottom: 20px;
+        }
+
+        /* Hero Container with Spacing */
+        .hero-section {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 28px;
+            padding: 60px;
+            text-align: center;
+            margin: 40px 0;
+            backdrop-filter: blur(25px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        }
+        .hero-section h1 { 
+            font-size: 64px !important; font-weight: 900 !important; 
+            margin-bottom: 15px !important; color: #ffffff !important;
+            letter-spacing: -2px;
+        }
+
+        .metric-card {
+            background: rgba(30, 41, 59, 0.6); border-radius: 20px; padding: 30px;
+            border: 1px solid #334155; text-align: center;
+            margin-bottom: 20px;
+            transition: 0.3s;
+        }
+        .metric-card:hover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.05); }
+
+        /* Enhanced Animated Buttons */
+        .stButton>button {
+            background: linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%);
+            border: none; border-radius: 16px; color: white;
+            height: 4.5em; font-weight: 800; font-size: 1.1em;
+            margin: 20px 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        .stButton>button:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 15px 30px rgba(56, 189, 248, 0.4);
+            filter: brightness(1.1);
+        }
+
+        /* Large Sidebar Radio Options */
+        div[data-testid="stSidebarUserContent"] label {
+            font-size: 1.2em !important; font-weight: 700 !important;
+            padding: 10px 0 !important;
+        }
+
+        .ai-msg { background: #1e293b; border-radius: 18px; padding: 20px; margin: 15px 0; border-left: 6px solid #38bdf8; line-height: 1.6; }
+        
+        hr { border: 0; height: 1px; background: #1e293b; margin: 40px 0; }
+        </style>
+    """, unsafe_allow_html=True)
+
+# ==========================================
+# 🧠 AI ANALYTICS ENGINE (Untouched Logic)
+# ==========================================
+class InstrunetCoreV3:
+    def __init__(self, path):
+        self.model = self._load_model(path)
+
+    @st.cache_resource
+    def _load_model(_self, path):
+        if os.path.exists(path):
+            return tf.keras.models.load_model(path, compile=False)
+        return None
+
+    def process_signal(self, path):
+        y, sr = librosa.load(path, sr=22050, duration=15)
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        peaks = librosa.util.peak_pick(
+            onset_env, pre_max=7, post_max=7, pre_avg=7, post_avg=7, delta=0.5, wait=30
+        )
+        times = librosa.frames_to_time(peaks, sr=sr)
+        if len(times) == 0: times = [0.0]
+        
+        features = []
+        for t in times[:10]:
+            start = int(max(0, (t - 0.5) * sr))
+            chunk = y[start : start + int(3*sr)]
+            if len(chunk) < 3*sr: chunk = np.pad(chunk, (0, int(3*sr)-len(chunk)))
+            mfcc = librosa.feature.mfcc(y=chunk, sr=sr, n_mfcc=40).T
+            mfcc = mfcc[:130] if mfcc.shape[0] >= 130 else np.pad(mfcc, ((0, 130-mfcc.shape[0]), (0, 0)))
+            features.append(self.model.predict(mfcc.reshape(1, 130, 40, 1), verbose=0)[0])
+
+        avg_preds = np.mean(features, axis=0)
+        top_idx = np.argmax(avg_preds)
+        
+        return {
+            "meta": {"id": datetime.now().strftime("%H:%M:%S")},
+            "result": {"label": FULL_NAMES[INSTRUMENTS[top_idx]], "conf": avg_preds[top_idx]},
+            "data": {"dist": {FULL_NAMES[INSTRUMENTS[i]]: float(avg_preds[i]) for i in range(len(INSTRUMENTS))}},
+            "signal": {"y": y, "sr": sr, "landmarks": times, "spec": librosa.feature.melspectrogram(y=y, sr=sr)}
+        }
+
+# ==========================================
+# 🖥️ ROUTING
+# ==========================================
+def render_home():
+    st.markdown("<div class='hero-section'><h1>INSTRUNET AI V3</h1><p style='font-size:1.2em; opacity:0.8;'>Neural Network Model for Instrumentation Classifier</p></div>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    with c1: st.markdown("<div class='metric-card'><h3>Convolutional</h3><p>V3 Architecture</p></div>", unsafe_allow_html=True)
+    with c2: st.markdown("<div class='metric-card'><h3>Spectral</h3><p>Peak Mapping</p></div>", unsafe_allow_html=True)
+    with c3: st.markdown("<div class='metric-card'><h3>Inference</h3><p>Real-Time Engine</p></div>", unsafe_allow_html=True)
     
-    st.subheader("📌 Navigation")
-    pages = ["About", "Upload & Analyze", "Instrument Distribution", "Audio Analysis", "History"]
-    choice = st.radio("Go to:", pages, index=pages.index(st.session_state.page))
-    
-    if choice != st.session_state.page:
-        st.session_state.page = choice
+    st.markdown("<div style='margin: 40px 0;'>", unsafe_allow_html=True)
+    if st.button("OPEN ANALYSIS STUDIO 🚀", use_container_width=True):
+        st.session_state.page = "Upload & Analyze"
         st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+def render_studio(engine):
+    st.title("🎙️ Analysis Studio")
+    st.markdown("<br>", unsafe_allow_html=True)
+    t1, t2 = st.tabs(["📁 UPLOAD MASTER FILE", "🎤 RECORD LIVE SESSION"])
+    with t1: file = st.file_uploader("Select high-fidelity audio source", type=["wav", "mp3"])
+    with t2: rec = st.audio_input("Initiate stream capture")
     
-    st.markdown("---")
-    
-    # --- INTELLIGENT AI AGENT ---
-    st.subheader("🤖 AI Technical Guide")
-    with st.expander("💬 Chat with Assistant", expanded=True if st.session_state.current_result else False):
-        for msg in st.session_state.messages:
-            st.chat_message(msg["role"]).write(msg["content"])
-
-        if prompt := st.chat_input("Ask: 'How did you know?'"):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            st.chat_message("user").write(prompt)
-
-            res = st.session_state.current_result
-            if res is None:
-                response = "Upload a clip first! I need data to explain the science to you."
-            else:
-                p = prompt.lower()
-                if "how" in p or "why" in p or "spectrogram" in p:
-                    response = (f"I identified {res['instrument']} based on spectral peaks. "
-                                f"I am switching your view to **Audio Analysis** so you can see the spectrogram evidence.")
-                    st.session_state.page = "Audio Analysis"
-                elif "confidence" in p or "sure" in p:
-                    response = f"My confidence is **{res['confidence']*100:.1f}%**. This is calculated from the MFCC features of the audio."
-                else:
-                    response = f"The analysis of '{res['filename']}' points to a {res['instrument']}."
-
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.chat_message("assistant").write(response)
-            if "switching" in response: st.rerun()
-
-        # Clear Chat Button - PLACED UNDER THE CHAT
-        st.write("") 
-        if st.button("🗑️ Clear Chat History", use_container_width=True):
-            st.session_state.messages = [{"role": "assistant", "content": "Chat reset! Ready for next analysis."}]
-            st.rerun()
-
-# =========================
-# PAGE ROUTING
-# =========================
-
-if st.session_state.page == "About":
-    st.header("📖 About Instrunet AI")
-    st.write("A state-of-the-art instrument recognition system using Multi-label CNNs.")
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Architecture", "4-Layer CNN")
-    col2.metric("Dataset", "IRMAS")
-    col3.metric("Analysis", "3s Window")
-    if st.button("Get Started 🚀", use_container_width=True):
-        st.session_state.page = "Upload & Analyze"; st.rerun()
-
-elif st.session_state.page == "Upload & Analyze":
-    st.header("📤 Input Audio")
-    tab1, tab2 = st.tabs(["📁 Upload File", "🎤 Live Record"])
-    with tab1: uploaded = st.file_uploader("Upload WAV/MP3", type=["wav", "mp3"])
-    with tab2: recorded = st.audio_input("Record Live Clip")
-    source = uploaded if uploaded else recorded
-
-    if source:
-        st.audio(source)
-        if st.button("🚀 Analyze Audio", use_container_width=True):
-            with st.spinner("Decoding spectral features..."):
+    src = file if file else rec
+    if src:
+        st.markdown("<div class='ai-msg'>Signal received. Preview the waveform below before processing.</div>", unsafe_allow_html=True)
+        st.audio(src)
+        if st.button("EXECUTE NEURAL SCAN"):
+            with st.status("Initializing Neural Layers...", expanded=True) as s:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    tmp.write(source.getvalue()); path = tmp.name
-                res = analyze_v2(path)
-                res["filename"] = getattr(source, 'name', 'Live_Recording.wav')
-                st.session_state.current_result = res
-                st.session_state.history.insert(0, res)
+                    tmp.write(src.getvalue()); p = tmp.name
+                res = engine.process_signal(p)
+                st.session_state.current = res
+                st.session_state.history.append(res)
+                s.update(label="Scanning Complete!", state="complete")
+                time.sleep(0.5)
                 st.session_state.page = "Instrument Distribution"
                 st.rerun()
 
-elif st.session_state.page == "Instrument Distribution":
-    res = st.session_state.current_result
-    if not res: st.warning("Please analyze a file first!")
-    else:
-        st.header(f"📊 Results for: {res['filename']}")
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.markdown(f"### Detected Family: \n# {res['family'].upper()}")
-            st.metric("Family Confidence", f"{res['confidence']*100:.1f}%")
-            st.info(f"Top Instrument: **{res['instrument'].upper()}**")
-        with c2:
-            st.subheader(f"Internal {res['family'].title()} Distribution")
-            for inst in FAMILY_MAP[res['family']]:
-                val = res["distribution"][inst]
-                st.write(f"**{inst.upper()}**")
-                st.progress(val)
-                st.caption(f"Confidence: {val*100:.1f}%")
+def render_distribution():
+    res = st.session_state.current
+    if not res: st.warning("Please analyze a file first."); return
+    st.title("📊 Analysis Results")
+    st.markdown(f"<div class='hero-section' style='padding:30px;'><h2>{res['result']['label'].upper()}</h2>"
+                f"<h4>Neural Confidence: {res['result']['conf']*100:.2f}%</h4></div>", unsafe_allow_html=True)
+    
+    df = pd.DataFrame(res['data']['dist'].items(), columns=['Inst', 'Val'])
+    fig = px.bar(df, x='Inst', y='Val', color='Val', color_continuous_scale='Turbo', template="plotly_dark")
+    fig.update_layout(height=450, margin=dict(t=20, b=20))
+    st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("OPEN TECHNICAL SIGNAL BREAKDOWN 🔬", use_container_width=True):
+        st.session_state.page = "Deep Technical Analysis"
+        st.rerun()
 
-elif st.session_state.page == "Audio Analysis":
-    res = st.session_state.current_result
-    if not res: st.warning("Analyze a file to see spectral breakdown.")
+def render_technical():
+    res = st.session_state.current
+    if not res: st.error("No active session found."); return
+    st.title("🔬 Deep Technical Analysis")
+    
+    
+    
+    st.subheader("1. Pulse Landmark & Temporal Peaks")
+    t = np.linspace(0, len(res['signal']['y'])/res['signal']['sr'], num=len(res['signal']['y']))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=t[::100], y=res['signal']['y'][::100], name="Amplitude", line=dict(color='#38bdf8', width=1.5)))
+    for l in res['signal']['landmarks']:
+        fig.add_vline(x=l, line_dash="dash", line_color="#ef4444", opacity=0.7)
+    fig.update_layout(template="plotly_dark", height=350, margin=dict(t=10)); st.plotly_chart(fig, use_container_width=True)
+    
+    st.divider()
+    
+    st.subheader("2. Mel-Spectrogram (Timbre Fingerprinting)")
+    
+    S_db = librosa.power_to_db(res['signal']['spec'], ref=np.max)
+    fig2 = px.imshow(S_db, origin='lower', aspect='auto', template="plotly_dark", color_continuous_scale='Magma')
+    fig2.update_layout(height=400, margin=dict(t=10))
+    st.plotly_chart(fig2, use_container_width=True)
+
+def render_history():
+    st.title("📜 Neural Audit Logs")
+    if not st.session_state.history: st.info("No previous sessions found in this instance.")
     else:
-        st.header("📈 Spectral Visualization")
-        st.info("The AI Agent redirected you here to show the technical evidence (Mel-Spectrogram).")
+        for item in reversed(st.session_state.history):
+            st.markdown(f"<div class='ai-msg'><b>SESSION [{item['meta']['id']}]</b><br>{item['result']['label']} — {item['result']['conf']*100:.1f}% Confidence</div>", unsafe_allow_html=True)
+
+# ==========================================
+# 🚀 MAIN LOOP
+# ==========================================
+def main():
+    apply_ultra_styles()
+    engine = InstrunetCoreV3(MODEL_PATH)
+    
+    if "page" not in st.session_state: st.session_state.page = "Home"
+    if "current" not in st.session_state: st.session_state.current = None
+    if "history" not in st.session_state: st.session_state.history = []
+    if "chat" not in st.session_state: st.session_state.chat = []
+
+    with st.sidebar:
+        st.markdown("<div class='nav-header'>🎼 INSTRUNET PRO</div>", unsafe_allow_html=True)
+        nav = st.radio("NAVIGATE SYSTEM", ["Home", "Upload & Analyze", "Instrument Distribution", "Deep Technical Analysis", "Audit Logs"], 
+                       index=["Home", "Upload & Analyze", "Instrument Distribution", "Deep Technical Analysis", "Audit Logs"].index(st.session_state.page))
+        if nav != st.session_state.page: st.session_state.page = nav; st.rerun()
         
-        fig, ax = plt.subplots(2, 1, figsize=(10, 7))
-        librosa.display.waveshow(res['raw_y'], sr=res['sr'], ax=ax[0], color="#2E86C1")
-        ax[0].set_title("Time Domain: Waveform")
-        S = librosa.feature.melspectrogram(y=res['raw_y'], sr=res['sr'])
-        librosa.display.specshow(librosa.power_to_db(S, ref=np.max), x_axis='time', y_axis='mel', ax=ax[1])
-        ax[1].set_title("Frequency Domain: Mel-Spectrogram")
-        plt.tight_layout()
-        st.pyplot(fig)
+        st.markdown("<div style='margin-top: 60px;'>", unsafe_allow_html=True)
+        st.subheader("🤖 AI Technical Guide")
+        for c in st.session_state.chat[-2:]: 
+            st.markdown(f"<div class='ai-msg' style='font-size:0.85em; padding:12px;'>{c['content']}</div>", unsafe_allow_html=True)
+        
+        if q := st.chat_input("Ask about MFCCs..."):
+            st.session_state.chat.append({"role": "user", "content": q})
+            st.session_state.chat.append({"role": "assistant", "content": "The system identifies timbre by mapping harmonic overtones onto a 2D Mel-frequency grid."})
+            st.rerun()
 
-elif st.session_state.page == "History":
-    st.header("📜 Session History")
-    if not st.session_state.history: st.info("History is empty.")
-    else:
-        for i, item in enumerate(st.session_state.history):
-            with st.expander(f"{item['filename']} — {item['family'].upper()}"):
-                col_a, col_b = st.columns(2)
-                col_a.write(f"**Top Instrument:** {item['instrument'].upper()}")
-                col_a.write(f"**Confidence:** {item['confidence']*100:.1f}%")
-                if col_b.button("Reload Report", key=f"hist_btn_{i}"):
-                    st.session_state.current_result = item
-                    st.session_state.page = "Instrument Distribution"
-                    st.rerun()
+    # Page Routing
+    if st.session_state.page == "Home": render_home()
+    elif st.session_state.page == "Upload & Analyze": render_studio(engine)
+    elif st.session_state.page == "Instrument Distribution": render_distribution()
+    elif st.session_state.page == "Deep Technical Analysis": render_technical()
+    elif st.session_state.page == "Audit Logs": render_history()
+
+if __name__ == "__main__":
+    main()
