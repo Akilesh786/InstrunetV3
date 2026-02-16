@@ -21,12 +21,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Define paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Ensure your model is inside a folder named 'models'
 MODEL_PATH = os.path.join(BASE_DIR, "models", "irmas_instrument_model.h5")
 
-# Instrument Labels
 INSTRUMENTS = ['cel', 'cla', 'flu', 'gac', 'gel', 'org', 'pia', 'sax', 'tru', 'vio', 'voi']
 FULL_NAMES = {
     'cel': 'Cello', 'cla': 'Clarinet', 'flu': 'Flute', 'gac': 'Acoustic Guitar',
@@ -40,7 +37,6 @@ FULL_NAMES = {
 def get_bot_response(user_input, last_result=None):
     user_input = user_input.lower()
     
-    # 1. Backend / Pipeline
     if any(word in user_input for word in ["backend", "pipeline", "process", "how it works"]):
         return """
         <b>Backend Pipeline:</b><br>
@@ -51,7 +47,6 @@ def get_bot_response(user_input, last_result=None):
         5. <b>Prediction:</b> The Softmax layer calculates probability for 11 instruments.
         """
 
-    # 2. Waveform & Pulse Landmarks (Context Aware)
     elif any(word in user_input for word in ["waveform", "peaks", "landmark", "lines", "amplitude"]):
         if last_result:
             count = len(last_result['signal']['landmarks'])
@@ -64,7 +59,6 @@ def get_bot_response(user_input, last_result=None):
             """
         return "The waveform shows signal amplitude over time. If you upload a file first, I can tell you exactly how many peaks I detected!"
 
-    # 3. Mel Spectrogram
     elif "spectrogram" in user_input or "mel" in user_input:
         return """
         <b>Mel Spectrogram:</b><br>
@@ -72,7 +66,6 @@ def get_bot_response(user_input, last_result=None):
         but uses the <b>Mel Scale</b>, which mimics human hearing (we hear changes in low pitch better than high pitch).
         """
 
-    # 4. CNN / Model Architecture
     elif any(word in user_input for word in ["model", "cnn", "layers", "neural", "network"]):
         return """
         <b>CNN Architecture:</b><br>
@@ -84,11 +77,9 @@ def get_bot_response(user_input, last_result=None):
         - <b>Softmax:</b> To output the final % probabilities.
         """
 
-    # 5. Accuracy
     elif "accuracy" in user_input:
         return "The Instrunet model achieves approximately <b>85–92% validation accuracy</b> depending on the specific instrument class and recording quality."
     
-    # 6. Overfitting
     elif "overfitting" in user_input:
         return """
         <b>Preventing Overfitting:</b><br>
@@ -96,7 +87,6 @@ def get_bot_response(user_input, last_result=None):
         We prevent this using <b>Dropout Layers</b> (randomly disabling neurons during training) and <b>Early Stopping</b>.
         """
 
-    # 7. Prediction Result (Context Aware)
     elif "prediction" in user_input or "result" in user_input or "what is this" in user_input:
         if last_result:
             return f"""
@@ -110,7 +100,7 @@ def get_bot_response(user_input, last_result=None):
         return "I am the Instrunet Technical Guide. Ask me about the <b>Waveform</b>, <b>CNN Model</b>, <b>Spectrograms</b>, or the <b>Backend Pipeline</b>!"
 
 # ==========================================
-# 🎨 ANIMATED CSS UI ENGINE
+# 🎨 ANIMATED CSS UI ENGINE (FIXED SPACING)
 # ==========================================
 def apply_ultra_styles():
     st.markdown("""
@@ -125,34 +115,57 @@ def apply_ultra_styles():
         }
         .stMarkdown, .stButton, .stPlotlyChart { animation: fadeInUp 0.6s ease-out; }
 
-        /* Sidebar */
+        /* Sidebar Styling */
         [data-testid="stSidebar"] { background-color: #0f172a !important; border-right: 1px solid #1e293b; }
-        .nav-header { color: #38bdf8; font-size: 28px; font-weight: 900; padding: 30px 0; text-align: center; border-bottom: 2px solid #1e293b; }
+        .nav-header { color: #38bdf8; font-size: 24px; font-weight: 900; padding: 20px 0; text-align: center; border-bottom: 1px solid #1e293b; margin-bottom: 20px; }
+        
+        /* Fix Sidebar Radio Spacing & Font */
+        div[role="radiogroup"] > label {
+            padding-top: 12px !important;
+            padding-bottom: 12px !important;
+            font-size: 1.05rem !important;
+            font-weight: 600 !important;
+            color: #cbd5e1 !important;
+        }
+        div[role="radiogroup"] > label:hover {
+            color: #38bdf8 !important;
+        }
 
         /* Hero Section */
         .hero-section {
-            background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 28px; padding: 60px; text-align: center; margin: 40px 0;
-            backdrop-filter: blur(25px); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px; padding: 50px; text-align: center; margin-bottom: 40px;
+            backdrop-filter: blur(20px); box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
         }
-        .hero-section h1 { font-size: 64px !important; font-weight: 900 !important; color: #ffffff !important; }
+        .hero-section h1 { font-size: 56px !important; font-weight: 900 !important; color: #ffffff !important; margin-bottom: 10px; }
 
-        /* Cards */
+        /* Cards & Architecture Box */
         .metric-card {
-            background: rgba(30, 41, 59, 0.6); border-radius: 20px; padding: 30px;
-            border: 1px solid #334155; text-align: center; margin-bottom: 20px;
+            background: rgba(30, 41, 59, 0.4); border-radius: 16px; padding: 35px;
+            border: 1px solid #334155; text-align: center; 
+            margin-bottom: 40px !important; /* Added spacing below card */
         }
 
-        /* Buttons */
+        /* Large Action Buttons */
         .stButton>button {
             background: linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%);
-            border: none; border-radius: 16px; color: white; height: 4.5em; font-weight: 800;
+            border: none; border-radius: 12px; color: white; height: 3.8em; font-weight: 700; font-size: 1.1em;
+            width: 100%; margin-top: 10px;
         }
-        .stButton>button:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(56, 189, 248, 0.3); }
+        .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(56, 189, 248, 0.25); }
 
-        /* Chat Bubbles */
-        .ai-msg { background: #1e293b; border-radius: 12px; padding: 15px; margin: 10px 0; border-left: 4px solid #38bdf8; font-size: 0.9em; line-height: 1.5; }
+        /* Chat Bubbles - More Spacing */
+        .ai-msg { 
+            background: #1e293b; 
+            border-radius: 12px; 
+            padding: 16px; 
+            margin-bottom: 20px; /* Added spacing between bubbles */
+            border-left: 4px solid #38bdf8; 
+            font-size: 0.9em; 
+            line-height: 1.6;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -170,34 +183,21 @@ class InstrunetCoreV3:
         return None
 
     def process_signal(self, path):
-        # Load audio (force 15s duration for consistency)
         y, sr = librosa.load(path, sr=22050, duration=15)
-        
-        # 1. Onset Detection (Find the 'attacks' of notes)
         onset_env = librosa.onset.onset_strength(y=y, sr=sr)
         peaks = librosa.util.peak_pick(onset_env, pre_max=7, post_max=7, pre_avg=7, post_avg=7, delta=0.5, wait=30)
         times = librosa.frames_to_time(peaks, sr=sr)
-        
-        # Fallback if no peaks found
         if len(times) == 0: times = [0.0]
         
         features = []
-        # Process up to 10 distinct segments from the audio
         for t in times[:10]:
             start = int(max(0, (t - 0.5) * sr))
             chunk = y[start : start + int(3*sr)]
-            # Pad if chunk is too short
             if len(chunk) < 3*sr: chunk = np.pad(chunk, (0, int(3*sr)-len(chunk)))
-            
-            # MFCC Extraction
             mfcc = librosa.feature.mfcc(y=chunk, sr=sr, n_mfcc=40).T
-            # Resize to model input shape (130, 40)
             mfcc = mfcc[:130] if mfcc.shape[0] >= 130 else np.pad(mfcc, ((0, 130-mfcc.shape[0]), (0, 0)))
-            
-            # Predict
             features.append(self.model.predict(mfcc.reshape(1, 130, 40, 1), verbose=0)[0])
 
-        # Average predictions across all chunks
         avg_preds = np.mean(features, axis=0)
         top_idx = np.argmax(avg_preds)
         
@@ -209,19 +209,22 @@ class InstrunetCoreV3:
         }
 
 # ==========================================
-# 🖥️ PAGE ROUTING & RENDERERS
+# 🖥️ PAGE ROUTING
 # ==========================================
 def render_home():
     st.markdown("<div class='hero-section'><h1>INSTRUNET AI</h1><p>Neural Network Model for Instrumentation Classifier</p></div>", unsafe_allow_html=True)
+    
+    # Architecture Box with better spacing
     st.markdown("""
-        <div class='metric-card' style='max-width: 1200px; margin: 0 auto;'>
+        <div class='metric-card' style='max-width: 1200px; margin: 0 auto 50px auto;'>
             <h3>System Architecture</h3>
-            <p style='font-size:1.1em; color:#cbd5e1; padding: 10px 40px;'>
+            <p style='font-size:1.1em; color:#cbd5e1; padding: 15px 40px; line-height: 1.8;'>
                 Utilizing deep <b>Convolutional Neural Networks (CNN)</b> for high-resolution <b>Spectral Mapping</b>. 
                 The system extracts <b>MFCCs</b> from temporal landmarks to generate real-time distributions.
             </p>
         </div>
     """, unsafe_allow_html=True)
+    
     if st.button("OPEN ANALYSIS STUDIO 🚀", use_container_width=True):
         st.session_state.page = "Upload & Analyze"
         st.rerun()
@@ -229,7 +232,6 @@ def render_home():
 def render_studio(engine):
     st.title("🎙️ Analysis Studio")
     file = st.file_uploader("Select audio source", type=["wav", "mp3"])
-    
     if file:
         st.audio(file)
         if st.button("EXECUTE NEURAL SCAN"):
@@ -237,9 +239,8 @@ def render_studio(engine):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
                     tmp.write(file.getvalue()); p = tmp.name
                 
-                # Check if model loaded
                 if engine.model is None:
-                    st.error("Model file not found! Check 'models/irmas_instrument_model.h5'")
+                    st.error("Model file not found!")
                 else:
                     res = engine.process_signal(p)
                     st.session_state.current = res
@@ -264,7 +265,6 @@ def render_technical():
     res = st.session_state.current
     st.title("🔬 Deep Technical Analysis")
     
-    # 1. Waveform with Landmarks
     st.subheader("1. Pulse Landmark & Temporal Peaks")
     t = np.linspace(0, len(res['signal']['y'])/res['signal']['sr'], num=len(res['signal']['y']))
     fig = go.Figure()
@@ -273,7 +273,6 @@ def render_technical():
         fig.add_vline(x=l, line_dash="dash", line_color="#ef4444", opacity=0.7)
     fig.update_layout(template="plotly_dark", height=350, margin=dict(t=10)); st.plotly_chart(fig, use_container_width=True)
     
-    # 2. Spectrogram
     st.subheader("2. Mel-Spectrogram (Timbre Fingerprinting)")
     S_db = librosa.power_to_db(res['signal']['spec'], ref=np.max)
     fig2 = px.imshow(S_db, origin='lower', aspect='auto', template="plotly_dark", color_continuous_scale='Magma')
@@ -289,43 +288,36 @@ def render_history():
             st.markdown(f"<div class='ai-msg'><b>SESSION [{item['meta']['id']}]</b><br>{item['result']['label']} — {item['result']['conf']*100:.1f}% Confidence</div>", unsafe_allow_html=True)
 
 # ==========================================
-# 🚀 MAIN APPLICATION LOOP
+# 🚀 MAIN LOOP
 # ==========================================
 def main():
     apply_ultra_styles()
     engine = InstrunetCoreV3(MODEL_PATH)
     
-    # Initialize Session State
     if "page" not in st.session_state: st.session_state.page = "Home"
     if "current" not in st.session_state: st.session_state.current = None
     if "history" not in st.session_state: st.session_state.history = []
     if "chat" not in st.session_state: st.session_state.chat = []
 
-    # Sidebar Navigation & Chat
     with st.sidebar:
         st.markdown("<div class='nav-header'>🎼 INSTRUNET AI</div>", unsafe_allow_html=True)
         nav = st.radio("NAVIGATE SYSTEM", ["Home", "Upload & Analyze", "Instrument Distribution", "Deep Technical Analysis", "Audit Logs"], 
                        index=["Home", "Upload & Analyze", "Instrument Distribution", "Deep Technical Analysis", "Audit Logs"].index(st.session_state.page))
         if nav != st.session_state.page: st.session_state.page = nav; st.rerun()
         
-        # Chatbot Section
         st.markdown("<div style='margin-top: 50px;'>", unsafe_allow_html=True)
         st.subheader("🤖 AI Technical Guide")
         
-        # Display Chat History (Last 3 messages)
         for c in st.session_state.chat[-3:]:
             role_label = "👤 YOU" if c["role"] == "user" else "🤖 AI"
             st.markdown(f"<div class='ai-msg'><b>{role_label}:</b><br>{c['content']}</div>", unsafe_allow_html=True)
         
-        # Chat Input
         if q := st.chat_input("Ask about Waveform or CNN..."):
-            # Pass 'current' result to bot so it can answer specific questions
             response = get_bot_response(q, st.session_state.current)
             st.session_state.chat.append({"role": "user", "content": q})
             st.session_state.chat.append({"role": "assistant", "content": response})
             st.rerun()
 
-    # Page Rendering
     if st.session_state.page == "Home": render_home()
     elif st.session_state.page == "Upload & Analyze": render_studio(engine)
     elif st.session_state.page == "Instrument Distribution": render_distribution()
